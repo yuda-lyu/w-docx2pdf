@@ -10,7 +10,6 @@ import fsIsFile from 'wsemi/src/fsIsFile.mjs'
 import fsIsFolder from 'wsemi/src/fsIsFolder.mjs'
 import fsCopyFile from 'wsemi/src/fsCopyFile.mjs'
 import fsDeleteFile from 'wsemi/src/fsDeleteFile.mjs'
-import fsRenameFile from 'wsemi/src/fsRenameFile.mjs'
 import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
 
 
@@ -78,8 +77,11 @@ async function WDocx2pdf(fpIn, fpOut, opt = {}) {
 
     //fpExeLibreOffice
     let fpExeLibreOffice = get(opt, 'fpExeLibreOffice', '')
-    if (!fsIsFile(fpExeLibreOffice)) {
+    if (!isestr(fpExeLibreOffice)) {
         fpExeLibreOffice = 'C:\\Program Files\\LibreOffice\\program\\soffice.exe'
+    }
+    if (mode === 'LibreOffice' && !fsIsFile(fpExeLibreOffice)) {
+        return Promise.reject(`opt.fpExeLibreOffice[${fpExeLibreOffice}] does not exist`)
     }
 
     //fdTemp

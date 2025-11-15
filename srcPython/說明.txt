@@ -1,13 +1,13 @@
 
 0.可用pyinstaller或nuitka編譯，但nuitka編譯出檔案會小一點(4x mb)，不過卻無法執行待研究
 
-1.可先用一般編譯方式產生spec檔: pyinstaller -F docx2pdf.py，就會產生docx2pdf.spec
+1.可先用一般編譯方式產生spec檔: pyinstaller -F cv.py，就會產生cv.spec
 
 2.若有需要修改spec後，編譯指令改為對spec檔編譯: pyinstaller build.spec
 
 3.使用build.bat進行編譯
 
-8.編譯完複製docx2pdf.exe至bin，使用bin\run.bat執行，傳入的b64可將物件
+8.編譯完複製cv.exe至bin，使用bin\run.bat執行，傳入的b64可將物件
 {
     'fpIn':'input.json',
     'fpOut':'output.json'

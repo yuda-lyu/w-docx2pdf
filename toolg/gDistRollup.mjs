@@ -10,7 +10,8 @@ rollupFiles({
     fns: 'WDocx2pdf.mjs',
     fdSrc,
     fdTar,
-    nameDistType: 'kebabCase',
+    hookNameDist: () => 'w-docx2pdf',
+    // nameDistType: 'kebabCase', //直接由hookNameDist給予
     globals: {
         'path': 'path',
         'fs': 'fs',

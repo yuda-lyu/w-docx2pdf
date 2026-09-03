@@ -11,9 +11,7 @@ import fsIsFolder from 'wsemi/src/fsIsFolder.mjs'
 import fsCopyFile from 'wsemi/src/fsCopyFile.mjs'
 import fsDeleteFile from 'wsemi/src/fsDeleteFile.mjs'
 import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
-
-
-let fdSrv = path.resolve()
+import autoDownloadFiles from './autoDownloadFiles.mjs'
 
 
 function isWindows() {
@@ -118,28 +116,9 @@ async function WDocx2pdf(fpIn, fpOut, opt = {}) {
 
     if (mode === 'MicrosoftOffice') {
 
-        //fnExe
-        let fnExe = `cv.exe`
-
-        //fdExe
-        let fdExe = ''
-        if (true) {
-            let fdExeSrc = `${fdSrv}/src/`
-            let fdExeNM = `${fdSrv}/node_modules/w-docx2pdf/src/`
-            if (fsIsFile(`${fdExeSrc}${fnExe}`)) {
-                fdExe = fdExeSrc
-            }
-            else if (fsIsFile(`${fdExeNM}${fnExe}`)) {
-                fdExe = fdExeNM
-            }
-            else {
-                return Promise.reject('can not find folder for docx2pdf')
-            }
-        }
-        // console.log('fdExe', fdExe)
-
-        //prog
-        let prog = `${fdExe}${fnExe}`
+        //prog, 自動定位cv.exe, 無檔案(安裝時npm封鎖scripts致postinstall未執行)則自動下載
+        let { fpExe } = await autoDownloadFiles()
+        let prog = fpExe
         // console.log('prog', prog)
 
         //inp

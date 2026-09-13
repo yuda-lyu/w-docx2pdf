@@ -2,3 +2,10 @@ node_modules
 srcPython/build
 srcPython/dist
 src/cv.exe
+.agents
+.opencode
+.claude
+CLAUDE*.md
+AGENTS*.md
+.env
+tmp

@@ -1,9 +1,9 @@
 {
   "name": "w-docx2pdf",
-  "version": "1.0.27",
+  "version": "1.0.28",
   "main": "dist/w-docx2pdf.umd.js",
   "dependencies": {
-    "wsemi": "^1.9.11"
+    "wsemi": "^1.9.12"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.16"

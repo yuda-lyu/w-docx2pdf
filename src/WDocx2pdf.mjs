@@ -11,7 +11,7 @@ import fsIsFolder from 'wsemi/src/fsIsFolder.mjs'
 import fsCopyFile from 'wsemi/src/fsCopyFile.mjs'
 import fsDeleteFile from 'wsemi/src/fsDeleteFile.mjs'
 import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
-import autoDownloadFiles from './autoDownloadFiles.mjs'
+import ensureBins from './ensureBins.mjs'
 
 
 function isWindows() {
@@ -116,9 +116,9 @@ async function WDocx2pdf(fpIn, fpOut, opt = {}) {
 
     if (mode === 'MicrosoftOffice') {
 
-        //prog, 自動定位cv.exe, 無檔案(安裝時npm封鎖scripts致postinstall未執行)則自動下載
-        let { fpExe } = await autoDownloadFiles()
-        let prog = fpExe
+        //prog, 經ensureBins取得cv.exe(首次使用時下載或自鏡像取得並依bin/manifest.json校驗, 之後自快取取得並校驗)
+        let bins = await ensureBins({ names: 'cv.exe' })
+        let prog = bins['cv.exe']
         // console.log('prog', prog)
 
         //inp
@@ -197,6 +197,10 @@ async function WDocx2pdf(fpIn, fpOut, opt = {}) {
 
     return 'ok'
 }
+
+
+//ensureBins, 部署前預先取得cv.exe(規格D1), 以屬性掛於預設匯出, 使既有之default匯出(UMD之module.exports)仍為函數
+WDocx2pdf.ensureBins = ensureBins
 
 
 export default WDocx2pdf

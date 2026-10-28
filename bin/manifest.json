@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "pkg": "w-docx2pdf",
+  "mode": "pinned",
+  "repo": "yuda-lyu/w-docx2pdf",
+  "commit": "495f7eb9bff777dd400753ad494b75b975f0169e",
+  "files": [
+    {
+      "name": "cv.exe",
+      "path": "bin/cv.exe",
+      "sha256": "cd1d36ac8b9487c7c5e9e5161fb7358283124604924f8883326b24b3289140cf",
+      "size": 12601507
+    }
+  ]
+}

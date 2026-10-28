@@ -10,4 +10,5 @@ tmp
 srcPython/build
 srcPython/dist
 _convertTempPdf
+/bin-cache/
 

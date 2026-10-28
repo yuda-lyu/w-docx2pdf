@@ -2,10 +2,15 @@ node_modules
 srcPython/build
 srcPython/dist
 src/cv.exe
+/bin/*
+!/bin/manifest.json
+/bin-cache/
+test/_tmp
 .agents
 .opencode
 .claude
 CLAUDE*.md
+sgud
 AGENTS*.md
 .env
 tmp

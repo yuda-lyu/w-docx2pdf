@@ -17,12 +17,20 @@ rollupFiles({
         'fs': 'fs',
         'process': 'process',
         'child_process': 'child_process',
+        'crypto': 'crypto',
+        'stream': 'stream',
+        'stream/promises': 'stream/promises',
+        'url': 'url',
     },
     external: [
         'path',
         'fs',
         'process',
         'child_process',
+        'crypto',
+        'stream',
+        'stream/promises',
+        'url',
     ],
 })
 

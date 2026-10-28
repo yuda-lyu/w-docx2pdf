@@ -1,15 +1,14 @@
 {
   "name": "w-docx2pdf",
-  "version": "1.0.30",
+  "version": "1.0.31",
   "main": "dist/w-docx2pdf.umd.js",
   "dependencies": {
-    "wsemi": "^1.9.25"
+    "wsemi": "^1.9.27"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.21"
   },
   "scripts": {
-    "postinstall": "node scripts/install.mjs",
     "test": "mocha --parallel \"test/*.test.mjs\" --timeout 180000",
     "deploy": "gh-pages -d docs"
   },

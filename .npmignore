@@ -10,7 +10,6 @@ test/_tmp
 .opencode
 .claude
 CLAUDE*.md
-sgud
 AGENTS*.md
 .env
 tmp

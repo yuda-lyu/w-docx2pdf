@@ -3,13 +3,13 @@
   "pkg": "w-docx2pdf",
   "mode": "pinned",
   "repo": "yuda-lyu/w-docx2pdf",
-  "commit": "495f7eb9bff777dd400753ad494b75b975f0169e",
+  "commit": "ba266e1d88ddf4ba2652c5a5ba3e7a68e6353525",
   "files": [
     {
       "name": "cv.exe",
       "path": "bin/cv.exe",
-      "sha256": "cd1d36ac8b9487c7c5e9e5161fb7358283124604924f8883326b24b3289140cf",
-      "size": 12601507
+      "sha256": "e7542543890f423a6e23baaa25372328a8ae8334ad0f01dc4a531de4e6d827bd",
+      "size": 9517102
     }
   ]
 }

@@ -487,3 +487,217 @@ describe('WDocx2pdf Word instance isolation', function() {
     })
 
 })
+
+
+describe('WDocx2pdf when cv.exe fails internally', function() {
+
+    //check
+    if (!isWindows()) {
+        return
+    }
+
+    //規格(排程第410項, R-CONVERT-RESULT-01): cv.exe轉檔例外時(輸入非docx, 損毀docx, Word無法開啟)只於stdout印出錯誤字典且其後仍印success、離開碼為0, execProcess不會reject;
+    //  ①WDocx2pdf須reject字串`[E_CONVERT_FAILED] 原因`, 原因取自Word之診斷(已依系統字碼頁解碼不亂碼, 不回顯輸入或輸出路徑), 不產生輸出檔, 輸出路徑上既有之檔不被改動
+    //  ②失敗後fdTemp內無本次之暫存檔(輸入複本與輸出暫存), 他次呼叫之暫存檔不被動到, fdTemp資料夾本身保留; ③其後正常docx仍resolve 'ok'、輸出為有效PDF、無暫存殘留; ④不殘留WINWORD, 不開啟可見之Word視窗
+    //  本組同〈Word instance isolation〉須在無其他Word時執行(有則整組略過並印出原因); 開檔失敗案先起可見視窗看門狗(自動化實例之可見視窗隨即結束並記錄)
+
+    let fdTmp = path.resolve('./test/_tmp/WDocx2pdf-fail')
+    let fdOut = path.join(fdTmp, 'out')
+    let fdTemp = path.join(fdTmp, 'temp') //WDocx2pdf之opt.fdTemp(轉檔暫存)
+    let prefix = '[E_CONVERT_FAILED] '
+    let fixedReasons = ['cv.exe reported an error', 'cv.exe returned no success result', 'output file was not generated or is empty']
+    let fnDecoy = 'docx2pdf_20000101000000_DECOY1.docx' //他次呼叫之暫存檔(模擬), 本組之失敗呼叫不得動它
+
+    //pre, 本組開始時已存在之WINWORD(須為空); null為本組未執行(略過或初始化前失敗), 此時after不結束任何WINWORD
+    let pre = null
+    let restoreBinEnv = null
+    let watch = null
+
+    let newPids = () => {
+        return wordPids().filter((v) => !pre.includes(v))
+    }
+
+    let tempFiles = () => {
+        return fs.readdirSync(fdTemp).filter((v) => v.startsWith('docx2pdf_')).sort()
+    }
+
+    //assertNoVisible, 規格④: 自監看第iw行起無可見之Word視窗(等監看再完成一輪後判定)
+    let assertNoVisible = async (iw) => {
+        assert.strict.deepEqual([], await watch.visibleSince(iw))
+    }
+
+    //conv, 經WDocx2pdf轉檔並回傳{ ok, v }(v為resolve值或reject值), 不拋錯
+    let conv = async (fpIn, fpOut) => {
+        let r = { ok: false, v: null }
+        await WDocx2pdf(fpIn, fpOut, { fdTemp })
+            .then((v) => {
+                r = { ok: true, v }
+            })
+            .catch((e) => {
+                r = { ok: false, v: e }
+            })
+        return r
+    }
+
+    //bads, 轉檔必失敗之輸入: 副檔名為.docx但內容非docx, 損毀之docx(截去後半之zip)
+    let bads = [
+        {
+            name: 'a text file named .docx',
+            gen: (fp) => {
+                fs.writeFileSync(fp, 'this is plain text, not a docx\r\nline2')
+            },
+        },
+        {
+            name: 'a truncated (corrupt) docx',
+            gen: (fp) => {
+                let fpGood = writeDocx(`${fp}.good`, { title: 'Word fail corrupt', pages: 1 })
+                let b = fs.readFileSync(fpGood)
+                fs.writeFileSync(fp, b.subarray(0, Math.floor(b.length / 2)))
+                fs.rmSync(fpGood, { force: true })
+            },
+        },
+    ]
+
+    before(async function() {
+        this.timeout(120000)
+
+        //前一組之轉檔器所開之Word可能仍在結束中
+        await waitWordGone(wordPids().filter(isAutomationWord), 30000)
+
+        //有其他Word(含使用者開啟者)時不跑本組, 免本組之收尾誤傷與判定受干擾
+        let pids = wordPids()
+        if (pids.length > 0) {
+            console.log(`skip [when cv.exe fails internally]: other WINWORD is running(${pids.join(',')})`)
+            this.skip()
+        }
+        pre = pids
+
+        restoreBinEnv = setBinEnv('WDocx2pdf-fail-bin')
+
+        //先取得轉檔器至快取
+        await WDocx2pdf.ensureBins()
+
+        fs.rmSync(fdTmp, { recursive: true, force: true })
+        fs.mkdirSync(fdOut, { recursive: true })
+        fs.mkdirSync(fdTemp, { recursive: true })
+
+        //先前被強制結束之Word所留下、指向本套件檔案之停用項目, 會使開檔跳出可見訊息框而停住, 先清除
+        let rd = clearDisabledItems(path.resolve('.'))
+        if (rd.removed.length > 0 || rd.failed.length > 0) {
+            console.log(`Word disabled items under this package: ${JSON.stringify(rd)}`)
+        }
+
+        watch = await startVisibleWordWatch(path.join(fdTmp, 'watch.stop'))
+    })
+
+    after(async function() {
+        this.timeout(60000)
+        if (watch) {
+            await watch.stop()
+        }
+
+        //收尾: 只結束本組新出現且經COM自動化啟動之WINWORD(各案已斷言不殘留, 此處為失敗時之清理); 開檔失敗之Word可能留下停用項目, 一律清除指向本套件之項目並記錄
+        if (pre !== null) {
+            let rk = await killNewAutomationWords(pre)
+            let rd = clearDisabledItems(path.resolve('.'))
+            if (rk.killed.length > 0 || rd.removed.length > 0 || rd.failed.length > 0) {
+                console.log(`cleanup: killed WINWORD ${JSON.stringify(rk)}, Word disabled items ${JSON.stringify(rd)}`)
+            }
+        }
+        if (restoreBinEnv) {
+            restoreBinEnv()
+        }
+        fs.rmSync(fdTmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
+        try {
+            fs.rmdirSync(path.resolve('./test/_tmp')) //尚有其他測試之暫存時非空, 略過
+        }
+        catch (err) {}
+    })
+
+    //前一案失敗時其模擬之他次暫存檔亦須移除, 免連帶影響其後各案
+    afterEach(function() {
+        fs.rmSync(path.join(fdTemp, fnDecoy), { force: true })
+    })
+
+    for (let c of bads) {
+        it(`${c.name}: rejects "[E_CONVERT_FAILED] <Word diagnosis>" (decoded, no paths), leaves no temp file of this call, keeps the existing output file, no WINWORD residue`, async function() {
+            this.timeout(180000)
+            let iw = watch.lines.length
+            let fpIn = path.join(fdTmp, `bad-${bads.indexOf(c)}.docx`)
+            let fpOut = path.join(fdOut, `bad-${bads.indexOf(c)}.pdf`)
+            c.gen(fpIn)
+            fs.writeFileSync(fpOut, 'STALE-OLD-CONTENT')
+            fs.writeFileSync(path.join(fdTemp, fnDecoy), 'other call input')
+
+            let r = await conv(fpIn, fpOut)
+
+            //規格①: reject字串`[E_CONVERT_FAILED] 原因`, 原因為Word之診斷(非固定說明), 不亂碼, 不含輸入或輸出路徑
+            assert.strict.equal(r.ok, false, `resolved [${r.v}]`)
+            assert.strict.equal(typeof r.v, 'string', String(r.v))
+            assert.strict.equal(r.v.startsWith(prefix), true, r.v)
+            let reason = r.v.slice(prefix.length)
+            assert.strict.equal(reason.includes('Microsoft Word'), true, r.v)
+            assert.strict.equal(fixedReasons.includes(reason), false, r.v)
+            assert.strict.equal(r.v.includes('�'), false, r.v)
+            assert.strict.equal(r.v.includes('can not convert'), false, r.v)
+            for (let p of [fpIn, fpOut, fdTemp, fdTmp]) {
+                assert.strict.equal(r.v.includes(p), false, r.v)
+                assert.strict.equal(r.v.includes(p.replace(/\\/g, '/')), false, r.v)
+                assert.strict.equal(r.v.includes(p.replace(/\\/g, '\\\\')), false, r.v)
+            }
+
+            //規格①: 輸出路徑上既有之檔不被改動
+            assert.strict.equal(fs.readFileSync(fpOut, 'utf8'), 'STALE-OLD-CONTENT')
+
+            //規格②: fdTemp內只剩他次呼叫之暫存檔(afterEach移除之), 資料夾本身保留
+            assert.strict.deepEqual([fnDecoy], tempFiles())
+
+            //規格④: 不殘留WINWORD, 不開啟可見視窗
+            assert.strict.deepEqual([], await waitWordGone(newPids()))
+            await assertNoVisible(iw)
+        })
+    }
+
+    it('removes both temp files also when the converted PDF can not be copied to fpOut (fpOut is an existing folder): rejects, no temp file, the folder is untouched', async function() {
+        this.timeout(180000)
+        let iw = watch.lines.length
+        let fpIn = writeDocx(path.join(fdTmp, 'out-is-folder.docx'), { title: 'Word fail out folder', pages: 1 })
+        let fpOut = path.join(fdOut, 'out-is-folder.pdf')
+        fs.mkdirSync(fpOut)
+
+        let r = await conv(fpIn, fpOut)
+
+        //規格①: 轉檔成功後複製至fpOut失敗(fpOut為資料夾), 此時輸出暫存檔已存在; reject之值為複製之錯誤(型態同改前, 非[E_CONVERT_FAILED])
+        assert.strict.equal(r.ok, false, `resolved [${r.v}]`)
+        assert.strict.equal(Boolean(r.v), true)
+        assert.strict.equal(fs.statSync(fpOut).isDirectory(), true)
+        assert.strict.deepEqual([], fs.readdirSync(fpOut))
+
+        //規格②: 輸入複本與輸出暫存皆清除
+        assert.strict.deepEqual([], tempFiles())
+        assert.strict.deepEqual([], await waitWordGone(newPids()))
+        await assertNoVisible(iw)
+    })
+
+    it('a normal docx after the failures still resolves "ok" with a valid PDF of its own pages, and leaves no temp file', async function() {
+        this.timeout(180000)
+        let iw = watch.lines.length
+        let fpIn = writeDocx(path.join(fdTmp, 'after-fail.docx'), { title: 'Word fail after', pages: 2 })
+        let fpOut = path.join(fdOut, 'after-fail.pdf')
+
+        let r = await conv(fpIn, fpOut)
+
+        //規格③: resolve 'ok', 輸出為來源之2頁PDF
+        assert.strict.deepEqual({ ok: true, v: 'ok' }, r)
+        assert.strict.deepEqual({ isPdf: true, hasEof: true, pages: 2 }, pdfInfo(fpOut))
+
+        //規格②③: 成功路徑亦清除暫存
+        assert.strict.deepEqual([], tempFiles())
+        assert.strict.equal(fs.existsSync(fdTemp), true)
+
+        //規格④
+        assert.strict.deepEqual([], await waitWordGone(newPids()))
+        await assertNoVisible(iw)
+    })
+
+})

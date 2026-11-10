@@ -12,6 +12,7 @@ import fsCopyFile from 'wsemi/src/fsCopyFile.mjs'
 import fsDeleteFile from 'wsemi/src/fsDeleteFile.mjs'
 import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
 import ensureBins from './ensureBins.mjs'
+import judgeConvertOutput, { judgeConvertFile } from './judgeConvertOutput.mjs'
 
 
 function isWindows() {
@@ -28,7 +29,7 @@ function isWindows() {
  * @param {String} [opt.fdTemp='./_convertTempPdf'] 輸入臨時檔位置字串，預設'./_convertTempPdf'
  * @param {String} [opt.mode='MicrosoftOffice'] 輸入執行模式字串，可使用'MicrosoftOffice'與'LibreOffice'，若要使用皆須安裝軟體，預設'MicrosoftOffice'
  * @param {String} [opt.fpExeLibreOffice='C:\\Program Files\\LibreOffice\\program\\soffice.exe'] 輸入若mode='LibreOffice'，須提供LibreOffice執行檔soffice.exe位置字串，預設'C:\\Program Files\\LibreOffice\\program\\soffice.exe'
- * @returns {Promise} 回傳Promise，resolve回傳成功訊息，reject回傳錯誤訊息
+ * @returns {Promise} 回傳Promise，resolve回傳成功訊息'ok'，reject回傳錯誤訊息。reject之值有下列型態：參數檢測失敗為說明字串；mode='MicrosoftOffice'取不到cv.exe為`[code] 訊息`字串(code取自ensureBins，如`[E_OFFLINE_MISSING] ...`，詳見README〈外部執行檔〉)；轉檔程式無法執行或離開碼非0為execProcess之訊息字串(如`code[N]:\n...`)；轉檔失敗(如輸入非docx、docx損毀、Word無法開啟)為字串`[E_CONVERT_FAILED] 原因`，mode='MicrosoftOffice'時cv.exe不論成敗離開碼皆為0，故依其輸出判定，原因為Word之診斷(已依系統字碼頁解碼，不回顯輸入或輸出路徑，但Word之診斷可能自行含檔名)，轉檔程式報成功卻未產生輸出檔(或為空檔)時原因為固定說明；轉檔成功但複製至fpOut失敗(如fpOut為既有資料夾)為fs之錯誤物件。轉檔失敗時不會產生或覆蓋fpOut；各返回路徑(含失敗)皆清除本次於opt.fdTemp內之輸入複本與輸出暫存檔，不刪opt.fdTemp資料夾本身，不動他次呼叫之暫存檔
  * @example
  *
  * import WDocx2pdf from './src/WDocx2pdf.mjs'
@@ -104,9 +105,6 @@ async function WDocx2pdf(fpIn, fpOut, opt = {}) {
     let fpInTemp = `${fdTemp}/${fnInTemp}`
     fpInTemp = path.resolve(fpInTemp)
 
-    //fsCopyFile
-    fsCopyFile(fpIn, fpInTemp)
-
     //fnOutTemp
     let fnOutTemp = `docx2pdf_${id}.pdf`
 
@@ -114,88 +112,121 @@ async function WDocx2pdf(fpIn, fpOut, opt = {}) {
     let fpOutTemp = `${fdTemp}/${fnOutTemp}`
     fpOutTemp = path.resolve(fpOutTemp)
 
-    if (mode === 'MicrosoftOffice') {
+    //暫存檔(fpInTemp, fpOutTemp)僅本次呼叫擁有(檔名含id), 任何返回路徑(成功, 取不到cv.exe而拋出, 各reject)皆於finally清除, 不刪fdTemp資料夾本身(可能為呼叫端共用), 不動他次呼叫之暫存檔
+    try {
 
-        //prog, 經ensureBins取得cv.exe(首次使用時下載或自鏡像取得並依bin/manifest.json校驗, 之後自快取取得並校驗)
-        let bins = await ensureBins({ names: 'cv.exe' })
-        let prog = bins['cv.exe']
-        // console.log('prog', prog)
+        //fsCopyFile
+        fsCopyFile(fpIn, fpInTemp)
 
-        //inp
-        let inp = {
-            fpIn: fpInTemp,
-            fpOut: fpOutTemp,
-            opt: {},
+        if (mode === 'MicrosoftOffice') {
+
+            //prog, 經ensureBins取得cv.exe(首次使用時下載或自鏡像取得並依bin/manifest.json校驗, 之後自快取取得並校驗)
+            //取不到時以字串reject(同w-docx-split、w-html2docx、w-docx2html), 故將ensureBins帶code之Error轉為`[code] message`; 暫存檔仍由finally清除
+            let prog = ''
+            let errBin = null
+            await ensureBins({ names: 'cv.exe' })
+                .then((r) => {
+                    prog = r['cv.exe']
+                })
+                .catch((err) => {
+                    errBin = `${isestr(get(err, 'code')) ? `[${err.code}] ` : ''}${isestr(get(err, 'message')) ? err.message : String(err)}`
+                })
+            if (errBin) {
+                return Promise.reject(errBin)
+            }
+            // console.log('prog', prog)
+
+            //inp
+            let inp = {
+                fpIn: fpInTemp,
+                fpOut: fpOutTemp,
+                opt: {},
+            }
+            // console.log('inp', inp)
+
+            //input to b64
+            let cInput = JSON.stringify(inp)
+            let b64Input = str2b64(cInput)
+            // console.log('b64Input', b64Input)
+
+            //execProcess, cv.exe以ANSI字碼頁輸出(中文系統為big5), 故codeCmd給auto使Word之診斷不亂碼
+            let output = ''
+            await execProcess(prog, b64Input, { codeCmd: 'auto' })
+                .then((r) => {
+                    output = r
+                })
+                .catch((err) => {
+                    console.log('execProcess catch', err)
+                    errTemp = err.toString()
+                })
+
+            //check
+            if (errTemp) {
+                return Promise.reject(errTemp)
+            }
+
+            //check, cv.exe轉檔失敗時(如輸入非docx, 損毀docx)只於stdout印出錯誤字典(其後仍印success)或`error: ...`且離開碼為0, execProcess不會reject, 故須依輸出判定
+            let j = judgeConvertOutput(output)
+            if (!j.ok) {
+                return Promise.reject(j.msg)
+            }
+
         }
-        // console.log('inp', inp)
+        else if (mode === 'LibreOffice') {
 
-        //input to b64
-        let cInput = JSON.stringify(inp)
-        let b64Input = str2b64(cInput)
-        // console.log('b64Input', b64Input)
+            //prog
+            let prog = fpExeLibreOffice
+            // console.log('prog', prog)
 
-        //execProcess
-        await execProcess(prog, b64Input)
-            .catch((err) => {
-                console.log('execProcess catch', err)
-                errTemp = err.toString()
-            })
+            //args
+            let args = [
+                '--headless',
+                '--norestore',
+                '--invisible',
+                '--convert-to', 'pdf:writer_pdf_Export',
+                '--outdir', fdTemp,
+                fpInTemp,
+            ]
+
+            //execProcess
+            await execProcess(prog, args)
+                .catch((err) => {
+                    console.log('execProcess catch', err)
+                    errTemp = err.toString()
+                })
+
+            //check
+            if (errTemp) {
+                return Promise.reject(errTemp)
+            }
+
+        }
+
+        //check, 轉檔程式報成功(或離開碼0)後仍須有輸出暫存檔, 兩種模式共用
+        let jf = judgeConvertFile(fpOutTemp)
+        if (!jf.ok) {
+            return Promise.reject(jf.msg)
+        }
+
+        //fsCopyFile
+        fsDeleteFile(fpOut)
+        let r = fsCopyFile(fpOutTemp, fpOut)
 
         //check
-        if (errTemp) {
-            return Promise.reject(errTemp)
+        if (r.error) {
+            return Promise.reject(r.error)
         }
 
+        return 'ok'
     }
-    else if (mode === 'LibreOffice') {
+    finally {
 
-        //prog
-        let prog = fpExeLibreOffice
-        // console.log('prog', prog)
-
-        //args
-        let args = [
-            '--headless',
-            '--norestore',
-            '--invisible',
-            '--convert-to', 'pdf:writer_pdf_Export',
-            '--outdir', fdTemp,
-            fpInTemp,
-        ]
-
-        //execProcess
-        await execProcess(prog, args)
-            .catch((err) => {
-                console.log('execProcess catch', err)
-                errTemp = err.toString()
-            })
-
-        //check
-        if (errTemp) {
-            return Promise.reject(errTemp)
-        }
+        //fsDeleteFile
+        fsDeleteFile(fpInTemp)
+        fsDeleteFile(fpOutTemp)
 
     }
 
-    //check
-    if (!fsIsFile(fpOutTemp)) {
-        return Promise.reject(`can not convert`)
-    }
-
-    //fsCopyFile
-    fsDeleteFile(fpOut)
-    let r = fsCopyFile(fpOutTemp, fpOut)
-
-    //check
-    if (r.error) {
-        return Promise.reject(r.error)
-    }
-
-    //fsDeleteFile
-    fsDeleteFile(fpInTemp)
-    fsDeleteFile(fpOutTemp)
-
-    return 'ok'
 }
 
 

@@ -1,5 +1,15 @@
 # w-docx2pdf 執行經驗
 
+## 轉換失敗判定與暫存清除(2026-11-11,dp410,規則 R-CONVERT-RESULT / R-CONVERT-TEMP)
+
+- **派工描述與實況不符,實測為準**:派工寫「轉換失敗是於 stdout 印 `error: <原因>`」.真 `cv.exe` 對非 docx 與損毀 docx 之實際輸出為三段——①輸入參數字典回顯(含輸入路徑)②錯誤字典單行 `{'type': <class 'pywintypes.com_error'>, 'message': "(-2147352567, '發生例外狀況。', (0, 'Microsoft Word', '檔案似乎已毀損。', 'wdmain11.chm', 25272, -2146822496), None)", 'traceback': [...]}` ③`success`;**無 `error:` 行**(離開碼 0).原因:`cv.py` 之 `cv()` 吞掉例外,`core()` 無從得知而仍印 `success`;`error:` 只出現在外層失敗(argv、base64、JSON、編碼).照範本只比對 `error:` 會判成功(仍靠輸出檔不存在兜住,但拿不到 Word 診斷).故 `judgeConvertOutput` 除 `error:` 行外,另辨識錯誤字典行並取其 `message`(Python repr 還原)為原因.修後 reject 值與 w-docx2html 之 `[E_CONVERT_FAILED] (-2147352567, '發生例外狀況。', (0, 'Microsoft Word', '檔案似乎已毀損。', …), None)` 相同.
+- **輸出為 ANSI 字碼頁**(中文系統 big5):`execProcess` 須 `codeCmd: 'auto'`,否則 Word 診斷變 `�`(變異 W4 實測被殺).回顯行亦含輸入路徑,故判定結果不得回顯其餘輸出.
+- **暫存殘留的真正範圍**:不只轉檔失敗——`ensureBins` 拋出(離線無快取)時,輸入複本也已複製而不清;改 `try … finally`,複製放在 `try` 內第一句.`fsCopyFile`／`fsDeleteFile` 皆不拋錯(回 `{ error }`),故複製置於 `try` 前後在行為上等價(變異 W7 存活,屬等價變異).
+- **輸出暫存檔存在而 reject 之真實路徑**:`fpOut` 為既有資料夾時,Word 轉檔成功、`fsDeleteFile(fpOut)` 回 `{ error }`(不處理)、`fsCopyFile` 回 EPERM 而 reject——此時輸出暫存檔存在,用於驗證 `fpOutTemp` 之清除(變異 W3 被殺);真 Word 無法使 `fpOutTemp` 在轉檔失敗時存在.
+- **假啟動檔(LibreOffice 模式未裝)**:`opt.fpExeLibreOffice` 可指任一執行檔.離開碼非 0 用 `process.execPath`(`node --headless …` 以 9 結束);**不可用 `cmd.exe`**(其進入互動模式等 stdin,spawn 永不結束,逾時後孤兒行程使 mocha 與 `quiet-run` 不退出,需手動結束該 `cmd.exe`);離開碼 0 且無輸出用 Git 附之 `true.exe`(無則略過該案).
+- **等價變異**:`judgeConvertFile` 去掉 `isFile()` 存活——NTFS 資料夾 `size` 為 0,已被 `size > 0` 擋下;保留 `isFile()` 作語意明示.
+- `quiet-run --lock` 對含真 Word 之 mocha 自動歸類為 Word 鎖(取得時印 `lock(Word)`);變異腳本於 `tmp/dp410/mutate.mjs`(副本置 `tmp/dp410/mut/<名>/`,以 `node <repo>/node_modules/mocha/bin/mocha.js` 於副本執行,Word 類變異需複製 `bin/cv.exe`).
+
 ## 2026-11-11 Word 實例隔離(排程第 408 項,範本 w-html2docx 之 hd408)
 
 - **根因**:原 `cv.py` 呼叫第三方 `docx2pdf` 0.1.8 之 `convert`,其 `windows()` 為 `win32com.client.Dispatch("Word.Application")`＋轉完 `word.Quit()`(`keep_active` 預設 False).`Dispatch` 先 GetActiveObject 連上已登錄於 ROT 之 Word,故借用他行程/使用者之 Word,並於轉完 `Quit()` 關掉它(修前 exe 之④紅測:對方持有之文件隨實例消失,讀取得 RPC 伺服器無法使用 0x800706BA;③紅測:例外後他行程之 Word 文件數由 1 變 2,即修前於借用之實例內開了文件而不關閉).該套件另有:例外時不關文件亦不 Quit(讀碼:殘留 WINWORD)、不設 `DisplayAlerts`(讀碼).已改為本套件自寫(`DispatchEx`、唯讀開啟、`closeOwnWord`),轉出方式(`SaveAs`,`FileFormat=17`)不變.

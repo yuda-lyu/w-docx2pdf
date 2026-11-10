@@ -47,6 +47,23 @@ test()
     })
 ```
 
+## 轉檔失敗之回報
+
+`WDocx2pdf()` 成功時 resolve `'ok'`;失敗時 reject,型態如下(判斷失敗原因請用字串前綴或 `code`,不要比對完整訊息):
+
+| 情形 | reject 之值 |
+|---|---|
+| 非 Windows、`fpIn` 不存在、`opt.fpExeLibreOffice` 不存在 | 說明字串 |
+| `mode='MicrosoftOffice'` 取不到 `cv.exe` | 字串 `[code] 訊息`(code 取自 `ensureBins()`,如 `[E_OFFLINE_MISSING] …`,見〈外部執行檔〉;舊版為 Error 物件) |
+| 轉檔程式無法執行或離開碼非 0 | `execProcess` 之訊息字串(如 `code[N]:\n...`) |
+| 轉檔失敗(輸入非 docx、docx 損毀、Word 無法開啟等) | 字串 `[E_CONVERT_FAILED] 原因`;`mode='MicrosoftOffice'` 時原因為 Word 之診斷(已依系統字碼頁解碼,不回顯輸入或輸出路徑,但 Word 之診斷可能自行含檔名) |
+| 轉檔程式報成功卻未產生輸出檔(或為空檔) | 字串 `[E_CONVERT_FAILED] output file was not generated or is empty` |
+| 轉檔成功但複製至 `fpOut` 失敗(如 `fpOut` 為既有資料夾) | fs 之錯誤物件 |
+
+- 轉檔失敗時不會產生或覆蓋 `fpOut`;各情形(含失敗)皆清除本次於 `opt.fdTemp` 內之輸入複本與輸出暫存檔,不刪 `opt.fdTemp` 資料夾本身,不動他次呼叫之暫存檔.
+- **Breaking changes(2026-11-11)**:`mode='MicrosoftOffice'` 轉檔失敗原本 reject 固定字串 `can not convert`(Word 之錯誤原因遺失),現改為 `[E_CONVERT_FAILED] 原因`;兩種模式「未產生輸出檔」之固定字串亦由 `can not convert` 改為 `[E_CONVERT_FAILED] output file was not generated or is empty`.以字串比對 `can not convert` 判斷失敗者,請改以前綴 `[E_CONVERT_FAILED]` 判斷.成功時之回傳值與輸出內容不變.
+- 轉檔失敗原本會在 `fdTemp`(預設為工作目錄下之 `./_convertTempPdf`)留下一份輸入文件之複本,現已清除.
+
 ## 外部執行檔
 
 本套件執行時需要下列外部執行檔(僅 `mode='MicrosoftOffice'` 使用),不含於 npm 包:

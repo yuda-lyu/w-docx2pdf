@@ -5,7 +5,7 @@
 
 2.若有需要修改spec後，編譯指令改為對spec檔編譯: pyinstaller build.spec
 
-3.使用build.bat進行編譯
+3.使用build.bat進行編譯(依cv.spec, 直接輸出至..\bin\cv.exe; 再手動複製一份至..\src\cv.exe, 見sgud規則R-BIN-07; 轉檔改以本檔cv.py自寫之Word COM, 不再依賴第三方docx2pdf套件, 見sgud規則R-WORD)
 
 8.編譯完複製cv.exe至bin，使用bin\run.bat執行，傳入的b64可將物件
 {

@@ -1,5 +1,15 @@
 # w-docx2pdf 執行經驗
 
+## 2026-11-11 Word 實例隔離(排程第 408 項,範本 w-html2docx 之 hd408)
+
+- **根因**:原 `cv.py` 呼叫第三方 `docx2pdf` 0.1.8 之 `convert`,其 `windows()` 為 `win32com.client.Dispatch("Word.Application")`＋轉完 `word.Quit()`(`keep_active` 預設 False).`Dispatch` 先 GetActiveObject 連上已登錄於 ROT 之 Word,故借用他行程/使用者之 Word,並於轉完 `Quit()` 關掉它(修前 exe 之④紅測:對方持有之文件隨實例消失,讀取得 RPC 伺服器無法使用 0x800706BA;③紅測:例外後他行程之 Word 文件數由 1 變 2,即修前於借用之實例內開了文件而不關閉).該套件另有:例外時不關文件亦不 Quit(讀碼:殘留 WINWORD)、不設 `DisplayAlerts`(讀碼).已改為本套件自寫(`DispatchEx`、唯讀開啟、`closeOwnWord`),轉出方式(`SaveAs`,`FileFormat=17`)不變.
+- **docx 輸入之「轉檔進行中」確定時點有兩種,性質相反**:①*連結圖*(`a:blip r:link` 指向 http):Word 在 `Open` 後約 0.1 秒向伺服器取圖,`Open` 先返回,伺服器扣住則 `SaveAs`(匯出 PDF)卡住,此時他行程之 `GetActiveObject` 亦被擋住(連 ATTACHED 都印不出),要等匯出結束;用於「轉檔中另有別的行程/Word」之案(①②③).②*附加範本*(`settings.xml` 之 `w:attachedTemplate` 指向 http):`Open` 期間 Word 依序發 `OPTIONS /`、`OPTIONS /`、`HEAD`、`GET`,只扣住 GET 時 Word 仍受理他行程之 COM(Add/Open 可行);**扣住 HEAD 或所有請求則不受理**(`wordInstance.mjs` 之 `startHoldServer` 會扣住 `/hold.png` 之任何方法,故④另寫只扣第一個 GET 之 `startGetHoldServer`).
+- **④他行程連上轉檔器之 Word 並持有文件**:不能用 `startBorrower`(Documents.Add 後寫文字):Word 忙於 `Open` 時寫入文字持續被拒,而轉檔器 `Open` 完成時 Word 會關閉未更動之空白新文件(實測 `words []`、轉檔器照常 Quit,看起來像「保留失敗」);改用新增之 `startOpenBorrower`(開啟一份既有檔並持有,結束時讀 `DOCS <實例文件數> <檔名>`).忙碌中 PowerShell 屬性語法讀不到型別資訊(`$d.Name` 得空值),故開啟時不讀屬性、結束時才以 `InvokeMember` 讀.
+- **同形陷阱**:Word 忙於他人之 `Open` 時,以 `InvokeMember` 取 `Documents` 再呼叫 `Open` 實測失敗(OPENFAIL「無法在值為 Null 的運算式上呼叫方法」),直接 `$w.Documents.Open(...)` 則可行;兩種寫法之可行性以實測為準,勿憑印象.
+- **測試腳手架**:`test/tools/docxFixture.mjs` 以自寫「僅儲存」zip 產生夾具(不加依賴);各案以不同頁數(1、2、3 頁)區分輸出出自哪個來源(`pdfInfo` 之 `/Count`).修前 exe 之紅測:②交錯與④因 `Quit()` 等待而逾時(180 秒/案),整組約 12 分鐘;修後約 35 秒.
+- **模擬夾**(第二段前驗證全套):`tmp/` 下複製套件(不含 `node_modules`、`.git`、`tmp`、`dist`、`docs`)並將清單改為新 exe 之 sha256／大小;不需連結——模擬夾位於 repo 之 `tmp/` 內,Node 自上層 repo 根解析 `node_modules`;以 `node <repo>/node_modules/mocha/bin/mocha.js` 於模擬夾執行(`npx mocha` 在模擬夾會把它當專案根而找不到本機 mocha).
+- **Git Bash 把以 `/` 開頭之引數轉成路徑**(如 `/c`、`/hold.png` 變成 `C:/Program Files/Git/...`):經 node/cmd 傳這類引數時加環境變數 `MSYS_NO_PATHCONV=1`.
+
 ## 2026-10-28 外部執行檔改造(制式規格,B 類)
 
 - **原有 `test/WDocx2pdf.test.mjs` 之 `convert` 在本機修前即紅**:轉出 PDF 為 135319 位元組,`test/ztmpTrue.pdf` 為 90895(兩者皆為 Microsoft Word 2021 產生之 1 頁 `%PDF-1.7`,頁數與檔頭相同,差在字型內嵌等機器差異).該案以「檔案大小相等」為斷言,屬現狀指紋且隨機器而異,與外部執行檔改造無關(改造前後轉出同為 135319).斷言未動,待裁示.

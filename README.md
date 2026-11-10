@@ -12,7 +12,7 @@ A tool for docx2pdf.
 To view documentation or get support, visit [docs](https://yuda-lyu.github.io/w-docx2pdf/global.html).
 
 ## Core
-> `w-docx2pdf` is based on the `docx2pdf` in `python`, and only run in `Windows`.
+> `w-docx2pdf` converts docx to pdf with `Microsoft Word` via COM (`pywin32`, in a bundled executable), and only run in `Windows`. It starts its own Word instance and only closes its own documents, so a Word opened by the user or by other processes is not borrowed or closed.
 
 ## Installation
 

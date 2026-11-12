@@ -1,12 +1,12 @@
 {
   "name": "w-docx2pdf",
-  "version": "1.0.46",
+  "version": "1.0.47",
   "main": "dist/w-docx2pdf.umd.js",
   "dependencies": {
-    "wsemi": "^1.9.57"
+    "wsemi": "^1.9.58"
   },
   "devDependencies": {
-    "w-package-tools": "^1.1.27"
+    "w-package-tools": "^1.1.28"
   },
   "scripts": {
     "test": "mocha --parallel \"test/*.test.mjs\" --timeout 180000",

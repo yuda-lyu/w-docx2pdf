@@ -218,7 +218,7 @@ describe(`ensureBins`, function() {
         assert.strict.deepStrictEqual(urls, [pathUrl])
     })
 
-    it(`should reject E_OFFLINE_MISSING naming the file, sha256, size and the full cache path when offline with no cache and no mirror (T6, O3)`, async function() {
+    it(`should reject E_OFFLINE_MISSING when offline with no cache and no mirror: err.missing[] carries the name, sha256, size and the full cache path, the message only names the file and the way to prepare (T6, O3, V20)`, async function() {
         let cache = `${fdt}/t6/cache`
         let err = null
         await ensureBins({ env: { W_BIN_OFFLINE: '1', W_BIN_CACHE: cache }, fetch: fetchNever }).catch((e) => {
@@ -226,15 +226,22 @@ describe(`ensureBins`, function() {
         })
         assert.strict.equal(err && err.code, 'E_OFFLINE_MISSING', err && err.message)
         let cachePath = path.resolve(cache, manifest.pkg, entry.sha256, 'cv.exe')
+
+        //規格T6: 缺哪個檔、應放何處由結構欄位err.missing[]驗(原案以訊息內含sha256、大小、快取路徑驗)
+        assert.strict.equal(err.missing.length, 1)
         assert.strict.equal(err.missing[0].name, 'cv.exe')
         assert.strict.equal(err.missing[0].sha256, entry.sha256)
         assert.strict.equal(err.missing[0].size, entry.size)
         assert.strict.equal(err.missing[0].cachePath, cachePath)
-        assert.strict.equal(err.message.includes('cv.exe'), true)
-        assert.strict.equal(err.message.includes(entry.sha256), true)
-        assert.strict.equal(err.message.includes(`${entry.size} bytes`), true)
-        assert.strict.equal(err.message.includes(cachePath), true)
-        assert.strict.equal(err.message.includes('W_BIN_MIRROR'), true)
+        assert.strict.equal(err.missing[0].mirrorPath, null) //無鏡像時為null
+        assert.strict.equal(err.missing[0].bundle, null) //單一檔, 非檔案組
+
+        //規格V20: 訊息含檔名與準備方法(含W_BIN_MIRROR之說明), 不含sha256、路徑與大小之值
+        assert.strict.equal(err.message.includes('cv.exe'), true, err.message)
+        assert.strict.equal(err.message.includes('W_BIN_MIRROR'), true, err.message)
+        for (let s of [entry.sha256, `${entry.size}`, cachePath, cache, path.resolve(cache)]) {
+            assert.strict.equal(err.message.includes(s), false, `message should not include [${s}]: ${err.message}`)
+        }
         assert.strict.deepStrictEqual(urls, [])
         assert.strict.deepStrictEqual(listFiles(cache), [])
     })
@@ -341,6 +348,20 @@ describe(`autoDownloadFiles`, function() {
         process.env.W_BIN_MIRROR = `${fdt}/mirror`
         process.env.W_BIN_CACHE = `${fdt}/cache`
         assert.strict.equal(err && err.code, 'E_OFFLINE_MISSING', err && err.message)
+
+        //應放之位置改由err.missing[]驗(規格O3、T6、V20): 快取與鏡像之完整路徑在欄位, 不在訊息
+        let fpCache = path.resolve(`${fdt}/emptyCache`, manifest.pkg, entry.sha256, 'cv.exe')
+        let fpMirror = path.resolve(`${fdt}/emptyMirror`, manifest.pkg, entry.sha256, 'cv.exe')
+        assert.strict.equal(err.missing.length, 1)
+        assert.strict.equal(err.missing[0].name, 'cv.exe')
+        assert.strict.equal(err.missing[0].sha256, entry.sha256)
+        assert.strict.equal(err.missing[0].size, entry.size)
+        assert.strict.equal(err.missing[0].cachePath, fpCache)
+        assert.strict.equal(err.missing[0].mirrorPath, fpMirror)
+        assert.strict.equal(err.message.includes('cv.exe'), true, err.message)
+        for (let s of [fpCache, fpMirror, path.resolve(`${fdt}/emptyCache`), path.resolve(`${fdt}/emptyMirror`), `${fdt}/emptyCache`, `${fdt}/emptyMirror`, entry.sha256]) {
+            assert.strict.equal(err.message.includes(s), false, `message should not include [${s}]: ${err.message}`)
+        }
     })
 
 })

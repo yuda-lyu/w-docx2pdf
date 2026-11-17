@@ -54,7 +54,7 @@ test()
 | 情形 | reject 之值 |
 |---|---|
 | 非 Windows、`fpIn` 不存在、`opt.fpExeLibreOffice` 不存在 | 說明字串 |
-| `mode='MicrosoftOffice'` 取不到 `cv.exe` | 字串 `[code] 訊息`(code 取自 `ensureBins()`,如 `[E_OFFLINE_MISSING] …`,見〈外部執行檔〉;舊版為 Error 物件) |
+| `mode='MicrosoftOffice'` 取不到 `cv.exe` | 字串 `[code] 訊息`(code 取自 `ensureBins()`,如 `[E_OFFLINE_MISSING] …`,見〈外部執行檔〉;離線缺檔之字串只含檔名與固定說明,不含路徑與 sha256,放置位置自 `ensureBins()` 之 `err.missing[]` 取得;舊版為 Error 物件) |
 | 轉檔程式無法執行或離開碼非 0 | `execProcess` 之訊息字串(如 `code[N]:\n...`) |
 | 轉檔失敗(輸入非 docx、docx 損毀、Word 無法開啟等) | 字串 `[E_CONVERT_FAILED] 原因`;`mode='MicrosoftOffice'` 時原因為 Word 之診斷(已依系統字碼頁解碼,不回顯輸入或輸出路徑,但 Word 之診斷可能自行含檔名) |
 | 轉檔程式報成功卻未產生輸出檔(或為空檔) | 字串 `[E_CONVERT_FAILED] output file was not generated or is empty` |
@@ -77,7 +77,31 @@ test()
 - 環境變數:
   - `W_BIN_CACHE=<資料夾>`:快取改放 `<資料夾>/w-docx2pdf/`(套件所在之 `node_modules` 唯讀時使用,多套件可共用同一資料夾).
   - `W_BIN_MIRROR=<資料夾或 http(s) 網址>`:內網鏡像,先找鏡像再連 GitHub;結構為 `<鏡像>/w-docx2pdf/<sha256>/cv.exe`.鏡像之檔同樣以清單校驗,不符即不用.
-  - `W_BIN_OFFLINE=1`:不連網,只用快取與鏡像;缺檔時錯誤(`E_OFFLINE_MISSING`)會列出缺哪些檔、sha256、大小與應放之完整路徑.
+  - `W_BIN_OFFLINE=1`:不連網,只用快取與鏡像;缺檔時錯誤(`E_OFFLINE_MISSING`)之訊息只列缺哪些檔與準備方法(不含 sha256 與路徑);sha256、大小與應放之完整路徑(`cachePath`、有設鏡像時之 `mirrorPath`)見該錯誤之 `err.missing[]`.
 - 離線部署:
   1. 在可連網之電腦設 `W_BIN_CACHE=<空資料夾>`,呼叫本套件之 `ensureBins()` 一次(或使用到相關功能一次).
   2. 把該資料夾整個帶到內網電腦,設 `W_BIN_MIRROR=<該資料夾>`(全離線時另設 `W_BIN_OFFLINE=1`).
+- 離線缺檔時之放置位置:`ensureBins()` reject 帶 `code` 之 Error,`code` 為 `E_OFFLINE_MISSING` 時,`err.missing[]` 逐檔載明 `name`、`sha256`、`size`、`cachePath`(應放入快取之完整路徑)、`mirrorPath`(有設鏡像時應放入鏡像之完整路徑,否則為 `null`)、`url` 等,**請自 `cachePath`／`mirrorPath` 讀取**.`WDocx2pdf()`(`mode='MicrosoftOffice'`)之 reject 為字串,離線缺檔時之 `[E_OFFLINE_MISSING] …` 只含檔名與固定說明,**不含路徑與 sha256**;需要放置位置時,於同環境呼叫 `ensureBins()` 即得.
+
+```alias
+import ensureBins from 'w-docx2pdf/src/ensureBins.mjs'
+
+async function test() {
+
+    //W_BIN_OFFLINE=1 且快取與鏡像皆無 cv.exe 時
+    try {
+        await ensureBins()
+    }
+    catch (err) {
+        if (err.code === 'E_OFFLINE_MISSING') {
+            console.log(err.missing)
+            // => [ { name: 'cv.exe', sha256: '…', size: …, cachePath: 'D:\\xxx\\…\\<sha256>\\cv.exe', mirrorPath: null, url: '…', … } ]
+        }
+    }
+
+}
+test()
+    .catch((err) => {
+        console.log('catch', err)
+    })
+```

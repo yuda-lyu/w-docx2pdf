@@ -29,7 +29,7 @@ function isWindows() {
  * @param {String} [opt.fdTemp='./_convertTempPdf'] 輸入臨時檔位置字串，預設'./_convertTempPdf'
  * @param {String} [opt.mode='MicrosoftOffice'] 輸入執行模式字串，可使用'MicrosoftOffice'與'LibreOffice'，若要使用皆須安裝軟體，預設'MicrosoftOffice'
  * @param {String} [opt.fpExeLibreOffice='C:\\Program Files\\LibreOffice\\program\\soffice.exe'] 輸入若mode='LibreOffice'，須提供LibreOffice執行檔soffice.exe位置字串，預設'C:\\Program Files\\LibreOffice\\program\\soffice.exe'
- * @returns {Promise} 回傳Promise，resolve回傳成功訊息'ok'，reject回傳錯誤訊息。reject之值有下列型態：參數檢測失敗為說明字串；mode='MicrosoftOffice'取不到cv.exe為`[code] 訊息`字串(code取自ensureBins，如`[E_OFFLINE_MISSING] ...`，詳見README〈外部執行檔〉)；轉檔程式無法執行或離開碼非0為execProcess之訊息字串(如`code[N]:\n...`)；轉檔失敗(如輸入非docx、docx損毀、Word無法開啟)為字串`[E_CONVERT_FAILED] 原因`，mode='MicrosoftOffice'時cv.exe不論成敗離開碼皆為0，故依其輸出判定，原因為Word之診斷(已依系統字碼頁解碼，不回顯輸入或輸出路徑，但Word之診斷可能自行含檔名)，轉檔程式報成功卻未產生輸出檔(或為空檔)時原因為固定說明；轉檔成功但複製至fpOut失敗(如fpOut為既有資料夾)為fs之錯誤物件。轉檔失敗時不會產生或覆蓋fpOut；各返回路徑(含失敗)皆清除本次於opt.fdTemp內之輸入複本與輸出暫存檔，不刪opt.fdTemp資料夾本身，不動他次呼叫之暫存檔
+ * @returns {Promise} 回傳Promise，resolve回傳成功訊息'ok'，reject回傳錯誤訊息。reject之值有下列型態：參數檢測失敗為說明字串；mode='MicrosoftOffice'取不到cv.exe為`[code] 訊息`字串(code取自ensureBins，如`[E_HASH_MISMATCH] ...`；離線缺檔為`[E_OFFLINE_MISSING] `加檔名與固定說明，字串不帶路徑與sha256，放置位置請呼叫`ensureBins()`自其錯誤之`err.missing[]`(`cachePath`、`mirrorPath`)取得，詳見README〈外部執行檔〉)；轉檔程式無法執行或離開碼非0為execProcess之訊息字串(如`code[N]:\n...`)；轉檔失敗(如輸入非docx、docx損毀、Word無法開啟)為字串`[E_CONVERT_FAILED] 原因`，mode='MicrosoftOffice'時cv.exe不論成敗離開碼皆為0，故依其輸出判定，原因為Word之診斷(已依系統字碼頁解碼，不回顯輸入或輸出路徑，但Word之診斷可能自行含檔名)，轉檔程式報成功卻未產生輸出檔(或為空檔)時原因為固定說明；轉檔成功但複製至fpOut失敗(如fpOut為既有資料夾)為fs之錯誤物件。轉檔失敗時不會產生或覆蓋fpOut；各返回路徑(含失敗)皆清除本次於opt.fdTemp內之輸入複本與輸出暫存檔，不刪opt.fdTemp資料夾本身，不動他次呼叫之暫存檔
  * @example
  *
  * import WDocx2pdf from './src/WDocx2pdf.mjs'
@@ -122,6 +122,7 @@ async function WDocx2pdf(fpIn, fpOut, opt = {}) {
 
             //prog, 經ensureBins取得cv.exe(首次使用時下載或自鏡像取得並依bin/manifest.json校驗, 之後自快取取得並校驗)
             //取不到時以字串reject(同w-docx-split、w-html2docx、w-docx2html), 故將ensureBins帶code之Error轉為`[code] message`; 暫存檔仍由finally清除
+            //訊息不帶路徑與sha256(規格V20): E_OFFLINE_MISSING時wsemi之訊息指向錯誤物件之missing欄位, 但字串無此欄位, 故改為只含檔名與固定說明(放置位置請呼叫ensureBins()自其err.missing[]之cachePath、mirrorPath取得); 其他錯誤碼沿用wsemi之訊息(其已不帶值與路徑)
             let prog = ''
             let errBin = null
             await ensureBins({ names: 'cv.exe' })
@@ -129,6 +130,14 @@ async function WDocx2pdf(fpIn, fpOut, opt = {}) {
                     prog = r['cv.exe']
                 })
                 .catch((err) => {
+                    if (get(err, 'code') === 'E_OFFLINE_MISSING') {
+                        let names = (Array.isArray(get(err, 'missing')) ? err.missing : []).map((v) => get(v, 'name')).filter((v) => isestr(v))
+                        if (names.length === 0) {
+                            names = ['cv.exe']
+                        }
+                        errBin = `[E_OFFLINE_MISSING] offline: ${names.join(', ')} is not in the cache or the mirror; to get where to place it, call ensureBins() of this package and read the err.missing[] (cachePath, mirrorPath) of its E_OFFLINE_MISSING error`
+                        return
+                    }
                     errBin = `${isestr(get(err, 'code')) ? `[${err.code}] ` : ''}${isestr(get(err, 'message')) ? err.message : String(err)}`
                 })
             if (errBin) {

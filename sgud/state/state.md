@@ -32,5 +32,7 @@
 
 ## 最近一次驗證
 
+- 2026-11-18(跟跑 wsemi 1.9.64,V20):離線缺檔(`E_OFFLINE_MISSING`)之訊息不再含 sha256、大小與路徑,測試改驗 `err.missing[]` 欄位(含有鏡像時之 `mirrorPath`),`WDocx2pdf()`(`mode='MicrosoftOffice'`)之字串改為只含檔名與「呼叫 `ensureBins()` 讀 `err.missing[]`」之固定說明,README〈外部執行檔〉已補放置位置之讀法;全套 `npm test` 59 passing／0 failing(修前 58 passing + 1 failing);包裝之 2 式變異(字串夾帶快取路徑、改回透傳)皆被 `unit-WDocx2pdfTemp` 之字串案殺.
+
 - 2026-11-11(排程第 410 項):全套 `npm test`(經測試鎖)59 passing／0 failing(5 檔:`unit-binManifest`、`unit-ensureBins`、`unit-judgeConvertOutput`、`unit-WDocx2pdfTemp`、`WDocx2pdf`);新增 33 案(修前:不需 Word 之 4 案與真 Word 之 3 案紅,見 `sgud/exp/experience.md`);變異 24 式中 22 式被殺,存活 2 式皆為等價變異(`judgeConvertFile` 去 `isFile()`、複製置於 `try` 前).
 - 2026-11-11(排程第 408 項):模擬夾(新 `cv.exe`＋清單改為其 sha256／大小)全套 26 passing／0 failing(isolation 6 案另重複 3 次皆綠);修前 exe 之 isolation 6 案全紅;L3:新舊 exe 轉 4 份 docx(`ztmp`、含表格圖片頁碼之 4 頁、3 頁、7 頁)之 PDF 頁數、頁尺寸、各頁文字、字型皆相同.repo 內 `npm test`(清單未重產)10 passing／11 failing(預期,見上).

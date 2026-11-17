@@ -30,3 +30,4 @@
 - **`quiet-run --lock` 等鎖時間不定**(實測 1～11 分):依需要把驗證合併成少數幾次執行;紅燈證據中,單一 mocha 指令字串內的 `;` 不會被當作 shell 分隔(quiet-run 將其視為參數),需分開執行.
 - **`git rm --cached` 會動到索引**:要刪工作樹檔案直接 `rm`,不要為了「確認」而先 `git rm --cached`(本輪誤用一次,以 `git restore --staged` 還原,未提交).
 - `toolg/gDistRollup.mjs` 第 2 行 `getFiles` 為既有未使用之 import(eslint `no-unused-vars`),非本輪造成,未動.
+- wsemi 1.9.64 起 `E_OFFLINE_MISSING` 之訊息只列檔名並指向「this error 之 `missing` 欄位」,但 `WDocx2pdf()` 以字串 reject、無此欄位,透傳會誤導,故該碼之字串由包裝自組(只含檔名與「呼叫 `ensureBins()` 讀 `err.missing[]`」);測試改驗 `err.missing[]` 欄位與「訊息不含 sha256、路徑」,字串案另於同環境呼叫 `WDocx2pdf.ensureBins()` 驗其 `err.missing[0].cachePath`;包裝之 2 式變異(字串夾帶快取路徑、改回透傳)皆被字串案殺.

@@ -89,6 +89,23 @@ describe('WDocx2pdf temp files', function() {
         assert.strict.equal(typeof r.v, 'string', String(r.v))
         assert.strict.equal(r.v.startsWith('[E_OFFLINE_MISSING] '), true, r.v)
         assert.strict.equal(r.v.includes('cv.exe'), true, r.v)
+
+        //規格V20: 字串含檔名與固定說明(離線準備請呼叫ensureBins()並讀err.missing[]), 不含sha256、大小、快取位置與快取根
+        let manifest = JSON.parse(fs.readFileSync('bin/manifest.json', 'utf8'))
+        let entry = manifest.files.find((v) => v.name === 'cv.exe')
+        let cachePath = path.join(process.env.W_BIN_CACHE, manifest.pkg, entry.sha256, 'cv.exe')
+        assert.strict.equal(r.v.includes('ensureBins()'), true, r.v)
+        assert.strict.equal(r.v.includes('err.missing[]'), true, r.v)
+        for (let s of [entry.sha256, `${entry.size}`, cachePath, process.env.W_BIN_CACHE, fdt]) {
+            assert.strict.equal(r.v.includes(s), false, `message should not include [${s}]: ${r.v}`)
+        }
+
+        //應放之位置改由說明所指之途徑取得: 同環境下WDocx2pdf.ensureBins()之err.missing[](規格T6; 原案以字串內含sha256與路徑驗)
+        let errBins = await WDocx2pdf.ensureBins().then(() => null).catch((e) => e)
+        assert.strict.equal(errBins instanceof Error, true)
+        assert.strict.equal(errBins.code, 'E_OFFLINE_MISSING', errBins.message)
+        assert.strict.deepStrictEqual(errBins.missing.map((v) => [v.name, v.sha256, v.size, v.cachePath]), [['cv.exe', entry.sha256, entry.size, cachePath]])
+
         assert.strict.deepStrictEqual(tempFiles(), [])
         assert.strict.equal(fs.existsSync(fdTemp), true)
         assert.strict.equal(fs.existsSync(fpOut), false)

@@ -1,5 +1,5 @@
 /*!
- * w-docx2pdf v1.0.57
+ * w-docx2pdf v1.0.58
  * (c) 2018-2021 yuda-lyu(semisphere)
  * Released under the MIT License.
  */
